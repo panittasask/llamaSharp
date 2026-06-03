@@ -1,0 +1,31 @@
+using llamaCPGGUFllm.Services;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+
+builder.Services.AddControllers();
+// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+builder.Services.Configure<LlmConfiguration>(builder.Configuration.GetSection("LlmConfiguration"));
+
+// 2. ลงทะเบียน Service เป็น Singleton (สำคัญมาก! ห้ามใช้ AddScoped หรือ AddTransient เด็ดขาด)
+builder.Services.AddSingleton<LlmService>();
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseHttpsRedirection();
+
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();

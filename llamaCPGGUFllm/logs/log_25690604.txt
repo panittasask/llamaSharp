@@ -1,0 +1,61 @@
+==================================================
+Timestamp    : 2569-06-04 01:20:16
+Prompt       : เขียน code สำหรับการใช้ llamasharp ในการเรียก model .gguf แล้วส่ง คำตอบให้หน่อย
+Response     : ต้องการเขียนโค้ดสำหรับการใช้ `llamasharp` ในการเรียก model `.gguf` และส่งคำตอบคืนมา คุณต้องมีการติดตั้งและ配置 `llamasharp` และต้องมี model `.gguf` ที่พร้อมแล้ว
+
+ตัวอย่างโค้ดด้านล่างนี้แสดงการใช้งาน `llamasharp` เพื่อเรียกใช้ model `.gguf` และส่งคำตอบคืนมา:
+
+```csharp
+using LlamaSharp;
+using LlamaSharp.Models;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        // ระบุ path ของ model .gguf
+        string modelPath = "path/to/your/model.gguf";
+
+        // สร้าง instance ของ model
+        using (var model = await LlamaFactory.CreateModelAsync(modelPath))
+        {
+            // ระบุ input text
+            string inputText = "Your input text here";
+
+            // ทำการสร้าง prompt สำหรับ model
+            var prompt = new Prompt(inputText);
+
+            // ทำการสร้าง request สำหรับ model
+            var request = new Request
+            {
+                Prompt = prompt,
+                MaxTokens = 50, // กำหนดจำนวน tokens ที่จะให้ model สร้าง
+                Temperature = 0.7, // กำหนดความหลากหลายของ output
+                TopP = 0.9, // กำหนดความแม่นยำของ output
+                FrequencyPenalty = 0.0, // กำหนดความน้อยน้อยของความซ้ำของ output
+                PresencePenalty = 0.0, // กำหนดความน้อยน้อยของความซ้ำของ output
+            };
+
+            // ส่ง request ไปยัง model และรับผลลัพธ์
+            var response = await model.GenerateAsync(request);
+
+            // แสดง output ของ model
+            Console.WriteLine("Output: " + response.Text);
+        }
+    }
+}
+```
+
+โปรดทราบว่า:
+- คุณต้องระบุ path ของ model `.gguf` ที่ถูกต้องในตัวแปร `modelPath`
+- คุณต้องระบุ input text ที่คุณต้องการให้ model ประมวลผลในตัวแปร `inputText`
+- คุณสามารถปรับแต่งตัวแปร `request` ตามความต้องการของคุณ เช่น จำนวน tokens ที่จะให้ model สร้าง, ความหลากหลายของ output, ความแม่นยำของ output, และอื่นๆ
+
+คำเตือน: โค้ดนี้เป็นตัวอย่างทั่วไปและอาจต้องปรับแต่งตามความต้องการของคุณและ model ที่คุณใช้.
+Time Elapsed : 75994 ms (75.99 seconds)
+==================================================
+
