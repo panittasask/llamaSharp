@@ -3,20 +3,16 @@
   "WorkspaceRootPath": "G:\\C# llama\\llamaCPGGUFllm\\",
   "Documents": [
     {
+      "AbsoluteMoniker": "D:0:0:{1ADFB1FD-1E54-4429-8F2E-AA176EF8C795}|llamaCPGGUFllm\\llamaCPGGUFllm.csproj|g:\\c# llama\\llamacpggufllm\\llamacpggufllm\\services\\llmservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{1ADFB1FD-1E54-4429-8F2E-AA176EF8C795}|llamaCPGGUFllm\\llamaCPGGUFllm.csproj|solutionrelative:llamacpggufllm\\services\\llmservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{1ADFB1FD-1E54-4429-8F2E-AA176EF8C795}|llamaCPGGUFllm\\llamaCPGGUFllm.csproj|g:\\c# llama\\llamacpggufllm\\llamacpggufllm\\controllers\\agentcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{1ADFB1FD-1E54-4429-8F2E-AA176EF8C795}|llamaCPGGUFllm\\llamaCPGGUFllm.csproj|solutionrelative:llamacpggufllm\\controllers\\agentcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{1ADFB1FD-1E54-4429-8F2E-AA176EF8C795}|llamaCPGGUFllm\\llamaCPGGUFllm.csproj|g:\\c# llama\\llamacpggufllm\\llamacpggufllm\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{1ADFB1FD-1E54-4429-8F2E-AA176EF8C795}|llamaCPGGUFllm\\llamaCPGGUFllm.csproj|solutionrelative:llamacpggufllm\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{1ADFB1FD-1E54-4429-8F2E-AA176EF8C795}|llamaCPGGUFllm\\llamaCPGGUFllm.csproj|g:\\c# llama\\llamacpggufllm\\llamacpggufllm\\services\\llmservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{1ADFB1FD-1E54-4429-8F2E-AA176EF8C795}|llamaCPGGUFllm\\llamaCPGGUFllm.csproj|solutionrelative:llamacpggufllm\\services\\llmservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{1ADFB1FD-1E54-4429-8F2E-AA176EF8C795}|llamaCPGGUFllm\\llamaCPGGUFllm.csproj|g:\\c# llama\\llamacpggufllm\\llamacpggufllm\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
-      "RelativeMoniker": "D:0:0:{1ADFB1FD-1E54-4429-8F2E-AA176EF8C795}|llamaCPGGUFllm\\llamaCPGGUFllm.csproj|solutionrelative:llamacpggufllm\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
     }
   ],
   "DocumentGroupContainers": [
@@ -26,24 +22,24 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 3,
+          "SelectedChildIndex": 0,
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 0,
               "Title": "LlmService.cs",
               "DocumentMoniker": "G:\\C# llama\\llamaCPGGUFllm\\llamaCPGGUFllm\\Services\\LlmService.cs",
               "RelativeDocumentMoniker": "llamaCPGGUFllm\\Services\\LlmService.cs",
               "ToolTip": "G:\\C# llama\\llamaCPGGUFllm\\llamaCPGGUFllm\\Services\\LlmService.cs",
               "RelativeToolTip": "llamaCPGGUFllm\\Services\\LlmService.cs",
-              "ViewState": "AgIAAAoAAAAAAAAAAAAywEUAAAARAAAAAAAAAA==",
+              "ViewState": "AgIAAAQAAAAAAAAAAAAAACEAAABuAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-06-03T18:16:29.349Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 2,
               "Title": "Program.cs",
               "DocumentMoniker": "G:\\C# llama\\llamaCPGGUFllm\\llamaCPGGUFllm\\Program.cs",
               "RelativeDocumentMoniker": "llamaCPGGUFllm\\Program.cs",
@@ -51,34 +47,19 @@
               "RelativeToolTip": "llamaCPGGUFllm\\Program.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAB8AAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-03T18:11:19.225Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-03T18:11:19.225Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
-              "Title": "appsettings.json",
-              "DocumentMoniker": "G:\\C# llama\\llamaCPGGUFllm\\llamaCPGGUFllm\\appsettings.json",
-              "RelativeDocumentMoniker": "llamaCPGGUFllm\\appsettings.json",
-              "ToolTip": "G:\\C# llama\\llamaCPGGUFllm\\llamaCPGGUFllm\\appsettings.json",
-              "RelativeToolTip": "llamaCPGGUFllm\\appsettings.json",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA0AAAABAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
-              "WhenOpened": "2026-06-03T18:11:05.472Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 1,
               "Title": "AgentController.cs",
               "DocumentMoniker": "G:\\C# llama\\llamaCPGGUFllm\\llamaCPGGUFllm\\Controllers\\AgentController.cs",
               "RelativeDocumentMoniker": "llamaCPGGUFllm\\Controllers\\AgentController.cs",
               "ToolTip": "G:\\C# llama\\llamaCPGGUFllm\\llamaCPGGUFllm\\Controllers\\AgentController.cs",
               "RelativeToolTip": "llamaCPGGUFllm\\Controllers\\AgentController.cs",
-              "ViewState": "AgIAAEsAAAAAAAAAAAAAAGMAAABEAAAAAAAAAA==",
+              "ViewState": "AgIAAEsAAAAAAAAAAAAAAGEAAABcAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-03T17:48:10.415Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-03T17:48:10.415Z"
             }
           ]
         }

@@ -59,3 +59,145 @@ class Program
 Time Elapsed : 75994 ms (75.99 seconds)
 ==================================================
 
+==================================================
+Timestamp    : 2569-06-04 01:42:54
+Prompt       : create beautiful html with css and javasript login page
+Response     : Creating a beautiful login page involves HTML, CSS, and JavaScript. Below is a simple example to get you started. This example includes a basic login form, some CSS for styling, and JavaScript for basic form validation.
+
+### HTML (index.html)
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Page</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="login-container">
+        <h2>Login</h2>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <button type="submit">Login</button>
+        </form>
+        <p id="message"></p>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
+```
+
+### CSS (styles.css)
+```css
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+}
+
+.login-container {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    width: 300px;
+    text-align: center;
+}
+
+h2 {
+    margin-bottom: 20px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+    text-align: left;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+}
+
+input[type="text"],
+input[type="password"] {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+button {
+    width: 100%;
+    padding: 10px;
+    background-color: #28a745;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #218838;
+}
+
+#message {
+    margin-top: 15px;
+    color: #dc3545;
+}
+```
+
+### JavaScript (script.js)
+```javascript
+document.getElementById('loginForm').addEventListener('submit', function(event) {
+    event.preventDefault();
+
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    const message = document.getElementById('message');
+
+    if (username === 'admin' && password === 'password') {
+        message.textContent = 'Login successful!';
+        message.style.color = '#28a745';
+    } else {
+        message.textContent = 'Invalid username or password.';
+        message.style.color = '#dc3545';
+    }
+});
+```
+
+### Explanation:
+1. **HTML**: The HTML file contains a simple form with fields for username and password. It also includes a button to submit the form.
+2. **CSS**: The CSS file styles the form and the container to make it visually appealing.
+3. **JavaScript**: The JavaScript file handles the form submission. It prevents the default form submission behavior, checks the username and password, and displays a success or error message.
+
+You can further enhance this example by adding more features like form validation, password strength check, and integrating with a backend server for authentication.
+Time Elapsed : 96076 ms (96.08 seconds)
+==================================================
+
+==================================================
+Timestamp    : 2569-06-04 02:04:32
+Prompt       : เขียน Hello World ใน C# สั้นๆ
+Response     : ```
+using System;
+
+class Program {
+    static void Main(string[] args) {
+        Console.WriteLine("Hello World!");
+    }
+}
+```
+Time Elapsed : 415 ms (0.41 seconds)
+==================================================
+

@@ -10,8 +10,11 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.Configure<LlmConfiguration>(builder.Configuration.GetSection("LlmConfiguration"));
 
-// 2. ลงทะเบียน Service เป็น Singleton (สำคัญมาก! ห้ามใช้ AddScoped หรือ AddTransient เด็ดขาด)
-builder.Services.AddSingleton<LlmService>();
+// ใช้ HttpClient คุยกับ llama-server (llama.cpp) — ตั้ง Timeout ยาว ๆ เผื่อ generate นาน
+builder.Services.AddHttpClient<LlmService>(client =>
+{
+    client.Timeout = TimeSpan.FromMinutes(10);
+});
 
 var app = builder.Build();
 
