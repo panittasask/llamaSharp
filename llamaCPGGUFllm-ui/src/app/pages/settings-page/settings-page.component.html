@@ -1,0 +1,465 @@
+<section class="settings-page">
+  <header>
+    <h1>Settings Center</h1>
+    <p>Split by tab: Server, Agent, Tools, and Prompt behaviors.</p>
+  </header>
+
+  <nav class="tab-nav">
+    <button
+      type="button"
+      [class.active]="activeTab === 'server'"
+      (click)="selectTab('server')"
+    >
+      Server
+    </button>
+    <button
+      type="button"
+      [class.active]="activeTab === 'agent'"
+      (click)="selectTab('agent')"
+    >
+      Agent
+    </button>
+    <button
+      type="button"
+      [class.active]="activeTab === 'tools'"
+      (click)="selectTab('tools')"
+    >
+      Tools
+    </button>
+    <button
+      type="button"
+      [class.active]="activeTab === 'prompt'"
+      (click)="selectTab('prompt')"
+    >
+      Prompt
+    </button>
+  </nav>
+
+  <article
+    class="card activity-card"
+    [class.busy]="agentBusy || searchBusy || runTestsBusy || promptCreateBusy"
+  >
+    <div class="activity-meta">
+      <span
+        class="activity-dot"
+        [class.active]="
+          agentBusy || searchBusy || runTestsBusy || promptCreateBusy
+        "
+      ></span>
+      <span
+        class="spinner"
+        *ngIf="agentBusy || searchBusy || runTestsBusy || promptCreateBusy"
+      ></span>
+      <strong>Agent activity: {{ currentActivity }}</strong>
+    </div>
+    <p>{{ activityText }}</p>
+  </article>
+
+  <article class="card api-card" *ngIf="activeTab === 'server'">
+    <h2>API Configuration</h2>
+    <label for="apiBase">Base API URL</label>
+    <div class="inline-row">
+      <input
+        id="apiBase"
+        type="text"
+        [(ngModel)]="apiBaseUrl"
+        placeholder="http://localhost:5054/api/Llm"
+      />
+      <button type="button" class="primary" (click)="saveApiBaseUrl()">
+        Save
+      </button>
+    </div>
+  </article>
+
+  <article class="card server-card" *ngIf="activeTab === 'server'">
+    <ng-container *ngIf="api.appState$ | async as state">
+      <h2>Server Control</h2>
+
+      <div
+        class="status"
+        [class.running]="state.status?.isRunning"
+        [class.stopped]="!state.status?.isRunning"
+      >
+        <strong>{{ state.status?.isRunning ? "Running" : "Stopped" }}</strong>
+        <span>PID: {{ state.status?.processId ?? "-" }}</span>
+      </div>
+
+      <div class="meta">
+        <div>
+          Base URL: <code>{{ state.status?.baseUrl ?? "-" }}</code>
+        </div>
+        <div>
+          Current model:
+          <code>{{ state.status?.currentModelPath ?? "-" }}</code>
+        </div>
+      </div>
+
+      <label for="modelSelect">Model</label>
+      <select
+        id="modelSelect"
+        [ngModel]="state.selectedModel"
+        (ngModelChange)="setSelectedModel($event)"
+      >
+        <option value="" disabled>Select a model</option>
+        <option *ngFor="let model of state.models" [ngValue]="model">
+          {{ model }}
+        </option>
+      </select>
+
+      <div class="actions">
+        <button
+          type="button"
+          class="success"
+          (click)="startServer()"
+          [disabled]="serverBusy"
+        >
+          Start
+        </button>
+        <button
+          type="button"
+          class="danger"
+          (click)="stopServer()"
+          [disabled]="serverBusy"
+        >
+          Stop
+        </button>
+        <button
+          type="button"
+          class="primary"
+          (click)="switchModel()"
+          [disabled]="serverBusy || !state.selectedModel"
+        >
+          Switch model
+        </button>
+        <button
+          type="button"
+          class="ghost"
+          (click)="refreshAll()"
+          [disabled]="serverBusy"
+        >
+          Refresh
+        </button>
+      </div>
+
+      <p class="status-text" *ngIf="statusText">{{ statusText }}</p>
+    </ng-container>
+  </article>
+
+  <article class="card" *ngIf="activeTab === 'agent' && agentState as plan">
+    <h2>Agent Plan & Checklist</h2>
+    <p class="subtext">{{ plan.goal }}</p>
+
+    <h3>Skill Selection</h3>
+    <p class="subtext">
+      Agent will read selected skill/rule files before running tools.
+    </p>
+    <div class="guidance-grid">
+      <div>
+        <label for="skillsSelect">Skills</label>
+        <select
+          id="skillsSelect"
+          multiple
+          [ngModel]="selectedSkills"
+          (ngModelChange)="onSkillsChange($event)"
+        >
+          <option *ngFor="let skill of plan.availableSkills" [ngValue]="skill">
+            {{ skill }}
+          </option>
+        </select>
+      </div>
+
+      <div>
+        <label for="rulesSelect">Rules</label>
+        <select
+          id="rulesSelect"
+          multiple
+          [ngModel]="selectedRules"
+          (ngModelChange)="onRulesChange($event)"
+        >
+          <option *ngFor="let rule of plan.availableRules" [ngValue]="rule">
+            {{ rule }}
+          </option>
+        </select>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button
+        type="button"
+        class="primary"
+        (click)="saveGuidanceSelection()"
+        [disabled]="agentBusy"
+      >
+        Save Skill/Rule Selection
+      </button>
+    </div>
+
+    <div class="inline-row">
+      <select
+        [ngModel]="selectedAgentFolder"
+        (ngModelChange)="selectedAgentFolder = $event"
+      >
+        <option *ngFor="let folder of plan.availableFolders" [ngValue]="folder">
+          {{ folder }}
+        </option>
+      </select>
+      <button
+        type="button"
+        class="primary"
+        (click)="saveAgentFolder()"
+        [disabled]="agentBusy"
+      >
+        Use Folder
+      </button>
+    </div>
+
+    <label for="customFolder">Custom folder path</label>
+    <div class="inline-row">
+      <input
+        id="customFolder"
+        type="text"
+        [ngModel]="selectedAgentFolder"
+        (ngModelChange)="selectedAgentFolder = $event"
+        placeholder="agent-workspace/skills"
+      />
+      <button
+        type="button"
+        class="ghost"
+        (click)="bootstrapAgentWorkspace()"
+        [disabled]="agentBusy"
+      >
+        Create Plan
+      </button>
+    </div>
+
+    <div class="checklist">
+      <label class="check-item" *ngFor="let item of plan.checklist">
+        <input
+          type="checkbox"
+          [checked]="item.isDone"
+          [disabled]="agentBusy"
+          (change)="toggleChecklist(item.id, $any($event.target).checked)"
+        />
+        <div>
+          <strong>{{ item.title }}</strong>
+          <p>{{ item.description }}</p>
+        </div>
+      </label>
+    </div>
+
+    <div class="actions">
+      <button
+        type="button"
+        class="primary"
+        (click)="rebuildIndex()"
+        [disabled]="agentBusy"
+      >
+        Rebuild Index + Embedding
+      </button>
+      <button
+        type="button"
+        class="ghost"
+        (click)="refreshAll()"
+        [disabled]="agentBusy"
+      >
+        Refresh Plan
+      </button>
+    </div>
+
+    <div class="meta" *ngIf="plan.lastIndexFile || plan.lastEmbeddingFile">
+      <div>
+        Index file: <code>{{ plan.lastIndexFile || "-" }}</code>
+      </div>
+      <div>
+        Embedding file: <code>{{ plan.lastEmbeddingFile || "-" }}</code>
+      </div>
+      <div>
+        Session: <code>{{ plan.sessionId || "-" }}</code>
+      </div>
+    </div>
+
+    <h3>Session Timeline</h3>
+    <div class="events">
+      <article
+        class="event-item"
+        *ngFor="let evt of plan.recentEvents; trackBy: trackEvent"
+      >
+        <div class="row">
+          <strong>{{ evt.activity }}</strong>
+          <span>{{ evt.status }}</span>
+        </div>
+        <p>{{ evt.detail }}</p>
+      </article>
+    </div>
+  </article>
+
+  <article class="card" *ngIf="activeTab === 'tools'">
+    <h2>Run Tests Tool</h2>
+    <p class="subtext">
+      Run terminal test command with retry loop and log into session timeline.
+    </p>
+
+    <label for="testCommand">Command</label>
+    <input
+      id="testCommand"
+      type="text"
+      [(ngModel)]="runTestsCommand"
+      placeholder="dotnet test llamaCPGGUFllm.sln"
+    />
+
+    <label for="maxAttempts">Max attempts</label>
+    <input
+      id="maxAttempts"
+      type="number"
+      min="1"
+      max="5"
+      [(ngModel)]="runTestsMaxAttempts"
+    />
+
+    <div class="actions">
+      <button
+        type="button"
+        class="primary"
+        (click)="runTestsTool()"
+        [disabled]="runTestsBusy"
+      >
+        {{ runTestsBusy ? "Running tests..." : "Run Tests Tool" }}
+      </button>
+    </div>
+
+    <div class="test-output" *ngIf="runTestsResult as tr">
+      <p>
+        <strong>Status:</strong>
+        {{ tr.passed ? "Passed" : "Failed" }} in {{ tr.attempts }} attempt(s)
+      </p>
+      <pre>{{ tr.output }}</pre>
+    </div>
+  </article>
+
+  <article class="card" *ngIf="activeTab === 'tools'">
+    <h2>Internet Search Tool</h2>
+    <p class="subtext">Provider: DuckDuckGo (open, no API key)</p>
+
+    <div class="inline-row">
+      <input
+        type="text"
+        [(ngModel)]="searchQuery"
+        placeholder="Search docs, package, or API references"
+      />
+      <button
+        type="button"
+        class="primary"
+        (click)="runWebSearch()"
+        [disabled]="searchBusy"
+      >
+        {{ searchBusy ? "Searching..." : "Search" }}
+      </button>
+    </div>
+
+    <div class="search-results" *ngIf="searchResults.length > 0">
+      <a
+        class="result"
+        *ngFor="let row of searchResults"
+        [href]="row.url"
+        target="_blank"
+        rel="noreferrer"
+      >
+        <strong>{{ row.title }}</strong>
+        <p>{{ row.snippet }}</p>
+        <span>{{ row.url }}</span>
+      </a>
+    </div>
+  </article>
+
+  <article class="card" *ngIf="activeTab === 'prompt' && agentState as plan">
+    <h2>Prompt File Creation</h2>
+    <p class="subtext">Control behavior when prompt asks to create files.</p>
+
+    <div class="mode-row">
+      <label class="choice">
+        <input
+          type="radio"
+          name="fileCreateMode"
+          value="ask-path"
+          [(ngModel)]="fileCreateMode"
+        />
+        Ask for path first
+      </label>
+      <label class="choice">
+        <input
+          type="radio"
+          name="fileCreateMode"
+          value="auto-create"
+          [(ngModel)]="fileCreateMode"
+        />
+        Auto create file
+      </label>
+    </div>
+
+    <label for="defaultCreateFolder">Default create folder</label>
+    <div class="inline-row">
+      <input
+        id="defaultCreateFolder"
+        type="text"
+        [(ngModel)]="defaultCreateFolder"
+        placeholder="agent-workspace/generated"
+      />
+      <button type="button" class="primary" (click)="saveFileCreateSettings()">
+        Save
+      </button>
+    </div>
+
+    <h3>Prompt Test</h3>
+    <label for="promptCreateInput">Prompt</label>
+    <textarea
+      id="promptCreateInput"
+      rows="4"
+      [(ngModel)]="promptCreateInput"
+      placeholder="Create README for payment module"
+    ></textarea>
+
+    <label for="promptTargetPath">Optional target path</label>
+    <input
+      id="promptTargetPath"
+      type="text"
+      [(ngModel)]="promptCreateTargetPath"
+      placeholder="src/features/payment/README.md"
+    />
+
+    <div class="actions two-col">
+      <button
+        type="button"
+        class="primary"
+        (click)="runPromptCreateFile()"
+        [disabled]="promptCreateBusy"
+      >
+        {{ promptCreateBusy ? "Processing..." : "Run Prompt Create File" }}
+      </button>
+      <button type="button" class="ghost" (click)="refreshAll()">
+        Refresh
+      </button>
+    </div>
+
+    <div class="result-box" *ngIf="promptCreateResult as result">
+      <p><strong>Message:</strong> {{ result.message }}</p>
+      <p>
+        <strong>Requires path:</strong> {{ result.requiresPath ? "Yes" : "No" }}
+      </p>
+      <p *ngIf="result.createdFilePath">
+        <strong>Created file:</strong> {{ result.createdFilePath }}
+      </p>
+      <p *ngIf="result.suggestedFolder">
+        <strong>Suggested folder:</strong> {{ result.suggestedFolder }}
+      </p>
+    </div>
+
+    <div class="meta">
+      <div>
+        Current mode: <code>{{ plan.fileCreationMode }}</code>
+      </div>
+      <div>
+        Default folder: <code>{{ plan.defaultCreateFolder }}</code>
+      </div>
+    </div>
+  </article>
+</section>

@@ -1,0 +1,31 @@
+<main class="app-shell" *ngIf="api.appState$ | async as state">
+  <aside class="side-nav">
+    <div class="brand-block">
+      <div class="dot"></div>
+      <div>
+        <h1>{{ title }}</h1>
+        <p>Local model assistant</p>
+      </div>
+    </div>
+
+    <nav>
+      <a routerLink="/chat" routerLinkActive="active">Chat</a>
+      <a routerLink="/agent" routerLinkActive="active">Agent</a>
+      <a routerLink="/settings" routerLinkActive="active">Settings</a>
+    </nav>
+
+    <section
+      class="status-card"
+      [class.running]="state.status?.isRunning"
+      [class.stopped]="!state.status?.isRunning"
+    >
+      <p class="label">Server</p>
+      <h2>{{ state.status?.isRunning ? "Online" : "Offline" }}</h2>
+      <p class="sub">Model: {{ state.selectedModel || "Not selected" }}</p>
+    </section>
+  </aside>
+
+  <section class="content-shell">
+    <router-outlet></router-outlet>
+  </section>
+</main>

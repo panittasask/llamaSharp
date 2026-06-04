@@ -1,0 +1,90 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.agent-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+}
+
+header h1 {
+  margin: 0;
+}
+
+header p {
+  margin: 6px 0 0;
+  color: var(--muted-ink);
+}
+
+.card {
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: #fff;
+  padding: 14px;
+}
+
+label {
+  display: block;
+  margin: 10px 0 6px;
+  color: var(--muted-ink);
+  font-size: 0.9rem;
+}
+
+input,
+textarea {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #d0dde3;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.actions {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+button {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #fff;
+  font-weight: 600;
+}
+
+button.primary {
+  background: linear-gradient(145deg, #1d6ca5, #3395cf);
+}
+
+.status {
+  margin: 10px 0 0;
+  color: #1d4f72;
+}
+
+.workflow-status {
+  margin: 8px 0 0;
+  color: #325266;
+}
+
+.result {
+  margin-top: 12px;
+  border: 1px solid #dce9ef;
+  border-radius: 10px;
+  padding: 10px;
+  background: #f7fbfd;
+}
+
+.result p {
+  margin: 4px 0;
+}

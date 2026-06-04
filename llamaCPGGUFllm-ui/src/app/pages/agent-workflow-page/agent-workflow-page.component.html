@@ -1,0 +1,51 @@
+<section class="agent-page">
+  <header>
+    <h1>Agent - Direct File Create</h1>
+    <p>Give file path + prompt. Workflow runs automatically in background.</p>
+  </header>
+
+  <article class="card">
+    <h2>Create File (Simple)</h2>
+    <label for="filePath">File path</label>
+    <input
+      id="filePath"
+      type="text"
+      [(ngModel)]="filePath"
+      placeholder="src/features/order/README.md"
+    />
+
+    <label for="filePrompt">Prompt</label>
+    <textarea
+      id="filePrompt"
+      rows="4"
+      [(ngModel)]="filePrompt"
+      placeholder="Create README for order feature with setup and API examples"
+    ></textarea>
+
+    <div class="actions">
+      <button
+        type="button"
+        class="primary"
+        (click)="createFileNow()"
+        [disabled]="createBusy"
+      >
+        {{ createBusy ? "Creating..." : "Create File" }}
+      </button>
+    </div>
+
+    <div class="result" *ngIf="createResult as cr">
+      <p><strong>Message:</strong> {{ cr.message }}</p>
+      <p *ngIf="cr.createdFilePath">
+        <strong>Created file:</strong> {{ cr.createdFilePath }}
+      </p>
+      <p *ngIf="cr.requiresPath"><strong>Requires path:</strong> Yes</p>
+    </div>
+
+    <p class="status" *ngIf="statusText">{{ statusText }}</p>
+    <p class="workflow-status" *ngIf="backgroundWorkflowStatus">
+      <strong>Workflow:</strong>
+      {{ backgroundWorkflowStatus }}
+      <span *ngIf="backgroundWorkflowBusy"> (running)</span>
+    </p>
+  </article>
+</section>

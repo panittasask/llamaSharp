@@ -1,0 +1,177 @@
+<section class="chat-page">
+  <aside class="chat-sidebar">
+    <div class="sidebar-top">
+      <div>
+        <p class="eyebrow">Workspace</p>
+        <h1>Llama Assistant</h1>
+        <p class="muted">Continue chats like ChatGPT or Gemini.</p>
+      </div>
+      <button type="button" class="new-chat" (click)="createNewChat()">
+        New Chat
+      </button>
+    </div>
+
+    <section class="sidebar-card">
+      <div class="sidebar-card-head">
+        <span>Context</span>
+        <strong>{{ remainingContextPercent }}%</strong>
+      </div>
+      <div class="context-meter">
+        <span [style.width.%]="remainingContextPercent"></span>
+      </div>
+      <p class="muted small">
+        {{ remainingContextTokens }} tokens left of {{ contextBudgetTokens }}
+      </p>
+    </section>
+
+    <section class="sidebar-card sessions-card">
+      <div class="sidebar-card-head">
+        <span>Sessions</span>
+        <strong>{{ sessions.length }}</strong>
+      </div>
+      <button
+        type="button"
+        class="session-item"
+        *ngFor="let session of sessions"
+        [class.active]="session.id === activeSessionId"
+        (click)="switchSession(session.id)"
+      >
+        <span class="session-title">{{ session.title }}</span>
+        <span class="session-meta">
+          {{ session.updatedAtUtc | date: "shortTime" }}
+        </span>
+      </button>
+    </section>
+
+    <section class="sidebar-card status-card">
+      <div class="sidebar-card-head">
+        <span>Status</span>
+        <strong>{{ activityState }}</strong>
+      </div>
+      <p class="muted small">{{ activityText }}</p>
+      <p class="muted small">API: {{ api.getApiBaseUrl() }}</p>
+    </section>
+  </aside>
+
+  <main class="chat-main">
+    <header class="chat-header">
+      <div>
+        <p class="eyebrow">Session</p>
+        <h2>{{ sessionLabel }}</h2>
+      </div>
+      <div class="header-chip">
+        <span>Remaining context</span>
+        <strong>{{ remainingContextTokens }} tokens</strong>
+      </div>
+    </header>
+
+    <div
+      #chatScrollFrame
+      class="chat-log"
+      [class.empty]="messages.length === 0"
+    >
+      <div class="empty-state" *ngIf="messages.length === 0">
+        <h3>Start a conversation</h3>
+        <p>
+          Ask something, continue later, or create a new session from the
+          sidebar.
+        </p>
+      </div>
+
+      <article
+        class="bubble"
+        *ngFor="let message of messages"
+        [class.user]="message.role === 'user'"
+        [class.assistant]="message.role === 'assistant'"
+      >
+        <div class="bubble-role">
+          {{ message.role === "user" ? "You" : "Assistant" }}
+        </div>
+        <p>{{ message.content }}</p>
+      </article>
+    </div>
+
+    <footer class="composer-shell">
+      <div class="composer-top" *ngIf="isAgentMode">
+        <label for="agentFilePath">Target file path</label>
+        <input
+          id="agentFilePath"
+          type="text"
+          [(ngModel)]="agentFilePath"
+          placeholder="src/features/order/README.md"
+        />
+      </div>
+
+      <textarea
+        [(ngModel)]="prompt"
+        (keydown)="onComposerKeyDown($event)"
+        rows="3"
+        [placeholder]="
+          isAgentMode
+            ? 'Describe what to create or change...'
+            : 'Message Llama Assistant...'
+        "
+      ></textarea>
+
+      <div class="composer-actions">
+        <p class="timing" *ngIf="lastNormalTiming">
+          Last response: {{ lastNormalTiming }}
+        </p>
+        <div class="actions-right">
+          <div class="mode-toggle" aria-label="Composer mode toggle">
+            <button
+              type="button"
+              class="mode-btn"
+              [class.active]="!isAgentMode"
+              (click)="setComposerMode('chat')"
+            >
+              Chat
+            </button>
+            <button
+              type="button"
+              class="mode-btn"
+              [class.active]="isAgentMode"
+              (click)="setComposerMode('agent')"
+            >
+              Agent
+            </button>
+          </div>
+
+          <div class="buttons">
+            <button
+              type="button"
+              class="secondary"
+              (click)="sendNormal()"
+              [disabled]="
+                normalBusy || streamBusy || !prompt.trim() || isAgentMode
+              "
+            >
+              {{ normalBusy ? "Testing..." : "Run Full Response (Test)" }}
+            </button>
+            <button
+              type="button"
+              class="primary"
+              (click)="submitComposer()"
+              [disabled]="
+                streamBusy ||
+                normalBusy ||
+                !prompt.trim() ||
+                (isAgentMode && !agentFilePath.trim())
+              "
+            >
+              {{
+                isAgentMode
+                  ? agentBusy
+                    ? "Running Agent..."
+                    : "Run Agent"
+                  : streamBusy
+                    ? "Streaming..."
+                    : "Send"
+              }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </main>
+</section>

@@ -1,20 +1,74 @@
 ﻿using System.Diagnostics;
 using llamaCPGGUFllm.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace llamaCPGGUFllm.Controllers
 {
     public record PromptRequest(string Prompt);
+    public record StartServerRequest(string? ModelPath);
+    public record SwitchModelRequest(string ModelPath);
+
+    public sealed record ServerConfigResponse(int ContextSize, int MaxTokens);
+
     [ApiController]
     [Route("api/[controller]")]
     public class LlmController : ControllerBase
     {
         private readonly LlmService _llmService;
+        private readonly LlamaServerManager _serverManager;
+        private readonly LlmConfiguration _configuration;
 
         // ฉีด LlmService เข้ามาใช้งานผ่าน DI
-        public LlmController(LlmService llmService)
+        public LlmController(LlmService llmService, LlamaServerManager serverManager, IOptions<LlmConfiguration> configuration)
         {
             _llmService = llmService;
+            _serverManager = serverManager;
+            _configuration = configuration.Value;
+        }
+
+        [HttpGet("server/status")]
+        public IActionResult GetServerStatus()
+        {
+            return Ok(_serverManager.GetStatus());
+        }
+
+        [HttpGet("server/models")]
+        public IActionResult GetAvailableModels()
+        {
+            var models = _serverManager.ListModels();
+            return Ok(new { count = models.Length, models });
+        }
+
+        [HttpGet("server/config")]
+        public IActionResult GetServerConfig()
+        {
+            return Ok(new ServerConfigResponse(_configuration.ContextSize, _configuration.MaxTokens));
+        }
+
+        [HttpPost("server/start")]
+        public IActionResult StartServer([FromBody] StartServerRequest? request)
+        {
+            var result = _serverManager.Start(request?.ModelPath);
+            return result.IsRunning ? Ok(result) : BadRequest(result);
+        }
+
+        [HttpPost("server/stop")]
+        public IActionResult StopServer()
+        {
+            return Ok(_serverManager.Stop());
+        }
+
+        [HttpPost("server/switch-model")]
+        public IActionResult SwitchModel([FromBody] SwitchModelRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.ModelPath))
+            {
+                return BadRequest("ModelPath is required");
+            }
+
+            var result = _serverManager.SwitchModel(request.ModelPath);
+            return result.IsRunning ? Ok(result) : BadRequest(result);
         }
 
         [HttpPost("stream")]
