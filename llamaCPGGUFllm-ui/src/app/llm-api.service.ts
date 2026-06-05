@@ -167,8 +167,7 @@ export class LlmApiService {
   }
 
   updateApiBaseUrl(rawUrl: string): void {
-    const next = (rawUrl || '').trim().replace(/\/$/, '');
-    const safeUrl = next || this.defaultBase;
+    const safeUrl = this.normalizeApiBaseUrl(rawUrl);
     this.apiBaseSubject.next(safeUrl);
     try {
       localStorage.setItem(LlmApiService.STORAGE_BASE_KEY, safeUrl);
@@ -227,13 +226,40 @@ export class LlmApiService {
         .getItem(LlmApiService.STORAGE_BASE_KEY)
         ?.trim();
       if (stored) {
-        return stored.replace(/\/$/, '');
+        return this.normalizeApiBaseUrl(stored);
       }
     } catch {
       // Ignore storage errors in restricted browser contexts.
     }
 
     return this.defaultBase;
+  }
+
+  private normalizeApiBaseUrl(rawUrl: string): string {
+    const trimmed = (rawUrl || '').trim();
+    if (!trimmed) {
+      return this.defaultBase;
+    }
+
+    const noSlash = trimmed.replace(/\/+$/, '');
+
+    if (/\/api\/llm$/i.test(noSlash)) {
+      return noSlash.replace(/\/api\/llm$/i, '/api/Llm');
+    }
+
+    if (/\/api\/agentworkspace$/i.test(noSlash)) {
+      return noSlash.replace(/\/api\/agentworkspace$/i, '/api/Llm');
+    }
+
+    if (/\/api$/i.test(noSlash)) {
+      return `${noSlash}/Llm`;
+    }
+
+    if (/\/api\//i.test(noSlash)) {
+      return noSlash;
+    }
+
+    return `${noSlash}/api/Llm`;
   }
 
   private endpoint(path: string): string {

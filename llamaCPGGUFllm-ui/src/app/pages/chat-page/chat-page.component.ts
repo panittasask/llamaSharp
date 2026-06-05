@@ -38,6 +38,10 @@ const SESSION_STORAGE_KEY = 'llm.chat.sessions.v1';
 const ACTIVE_SESSION_KEY = 'llm.chat.activeSessionId.v1';
 const DEFAULT_CONTEXT_SIZE = 4096;
 const DEFAULT_MAX_TOKENS = 1024;
+const STREAM_FLUSH_INTERVAL_MS = 10;
+const RECENT_WINDOW_MIN_TURNS = 4;
+const RECENT_WINDOW_MAX_TURNS = 8;
+const CONTEXT_SAFETY_MARGIN_RATIO = 0.8;
 
 @Component({
   selector: 'app-chat-page',
@@ -71,6 +75,8 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
   maxTokens = DEFAULT_MAX_TOKENS;
 
   private pendingAutoScroll = false;
+  private pendingStreamText = '';
+  private pendingStreamFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     public readonly api: LlmApiService,
@@ -93,9 +99,9 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
 
     this.pendingAutoScroll = false;
     const frame = this.chatScrollFrame?.nativeElement;
-    if (frame) {
-      frame.scrollTop = frame.scrollHeight;
-    }
+    // if (frame) {
+    //   frame.scrollTop = frame.scrollHeight;
+    // }
   }
 
   get activeSession(): ChatSession | undefined {
@@ -240,6 +246,8 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
     this.streamBusy = true;
     this.activityState = 'streaming';
     this.activityText = 'Streaming response...';
+    this.pendingStreamText = '';
+    this.clearPendingStreamFlush();
     const assistant: ChatMessage = { role: 'assistant', content: '' };
     this.messages.push(assistant);
     this.prompt = '';
@@ -274,9 +282,12 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
 
           for (const line of event.split('\n')) {
             if (!line.startsWith('data:')) continue;
-            const data = line.slice(5).trim();
+            const data = line.startsWith('data: ')
+              ? line.slice(6)
+              : line.slice(5);
 
-            if (data === '[DONE]') {
+            if (data.trim() === '[DONE]') {
+              this.flushPendingStreamText(assistant, true);
               this.streamBusy = false;
               this.activityState = 'idle';
               this.activityText = 'Idle';
@@ -288,20 +299,20 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
 
             this.activityState = 'acting';
             this.activityText = 'Acting on generated tokens...';
-            assistant.content += data.replace(/\\n/g, '\n');
-            this.touchActiveSession();
-            this.pendingAutoScroll = true;
+            this.enqueueStreamText(assistant, data.replace(/\\n/g, '\n'));
           }
 
           splitIndex = buffer.indexOf('\n\n');
         }
       }
     } catch (err) {
+      this.flushPendingStreamText(assistant, true);
       assistant.content += `\nError: ${this.formatError(err)}`;
       this.touchActiveSession();
       this.saveSessions();
       this.pendingAutoScroll = true;
     } finally {
+      this.flushPendingStreamText(assistant, true);
       this.streamBusy = false;
       this.activityState = 'idle';
       this.activityText = 'Idle';
@@ -489,20 +500,74 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
     const session = this.activeSession;
     if (!session) return [];
 
-    const budget = this.contextBudgetTokens;
     const all = session.messages;
-    const result: ChatMessagePayload[] = [];
-    let tokenCount = 0;
+    const budget = Math.max(
+      1,
+      Math.floor(this.contextBudgetTokens * CONTEXT_SAFETY_MARGIN_RATIO),
+    );
 
-    for (let i = all.length - 1; i >= 0; i--) {
-      const msg = all[i];
-      const tokens = this.estimateTokens(msg.content);
-      if (tokenCount + tokens > budget) break;
-      tokenCount += tokens;
-      result.unshift({ role: msg.role as 'user' | 'assistant', content: msg.content });
+    const maxWindow = this.collectRecentWindow(all, RECENT_WINDOW_MAX_TURNS);
+    let result = this.trimPayloadToBudget(maxWindow, budget);
+
+    // Try to preserve at least a short recent window when possible.
+    if (this.countUserTurns(result) < RECENT_WINDOW_MIN_TURNS) {
+      const minWindow = this.collectRecentWindow(all, RECENT_WINDOW_MIN_TURNS);
+      result = this.trimPayloadToBudget(minWindow, budget);
     }
 
     return result;
+  }
+
+  private collectRecentWindow(
+    messages: ChatMessage[],
+    maxUserTurns: number,
+  ): ChatMessagePayload[] {
+    const result: ChatMessagePayload[] = [];
+    let userTurns = 0;
+
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      result.unshift({ role: msg.role as 'user' | 'assistant', content: msg.content });
+
+      if (msg.role === 'user') {
+        userTurns += 1;
+        if (userTurns >= maxUserTurns) {
+          break;
+        }
+      }
+    }
+
+    return result;
+  }
+
+  private trimPayloadToBudget(
+    payload: ChatMessagePayload[],
+    budget: number,
+  ): ChatMessagePayload[] {
+    const result: ChatMessagePayload[] = [];
+    let tokenCount = 0;
+
+    for (let i = payload.length - 1; i >= 0; i--) {
+      const msg = payload[i];
+      const tokens = this.estimateMessageTokens(msg);
+      if (tokenCount + tokens > budget) {
+        break;
+      }
+
+      tokenCount += tokens;
+      result.unshift(msg);
+    }
+
+    return result;
+  }
+
+  private countUserTurns(payload: ChatMessagePayload[]): number {
+    return payload.filter((msg) => msg.role === 'user').length;
+  }
+
+  private estimateMessageTokens(message: ChatMessagePayload): number {
+    // Include a small per-message overhead for role and separators.
+    return this.estimateTokens(message.content) + 8;
   }
 
   private composeConversationPrompt(
@@ -533,6 +598,56 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
   private summarizeTitle(prompt: string): string {
     const cleaned = prompt.replace(/\s+/g, ' ').trim();
     return cleaned.length > 36 ? `${cleaned.slice(0, 36)}...` : cleaned;
+  }
+
+  trackSession(_: number, session: ChatSession): string {
+    return session.id;
+  }
+
+  trackMessage(index: number, message: ChatMessage): string {
+    return `${index}:${message.role}`;
+  }
+
+  private enqueueStreamText(assistant: ChatMessage, chunk: string): void {
+    if (!chunk) {
+      return;
+    }
+
+    this.pendingStreamText += chunk;
+    if (this.pendingStreamFlushTimer !== null) {
+      return;
+    }
+
+    this.pendingStreamFlushTimer = setTimeout(() => {
+      this.pendingStreamFlushTimer = null;
+      this.flushPendingStreamText(assistant);
+    }, STREAM_FLUSH_INTERVAL_MS);
+  }
+
+  private flushPendingStreamText(
+    assistant: ChatMessage,
+    force = false,
+  ): void {
+    if (force) {
+      this.clearPendingStreamFlush();
+    }
+
+    if (!this.pendingStreamText) {
+      return;
+    }
+
+    assistant.content += this.pendingStreamText;
+    this.pendingStreamText = '';
+    this.pendingAutoScroll = true;
+  }
+
+  private clearPendingStreamFlush(): void {
+    if (this.pendingStreamFlushTimer === null) {
+      return;
+    }
+
+    clearTimeout(this.pendingStreamFlushTimer);
+    this.pendingStreamFlushTimer = null;
   }
 
   private loadSessions(): void {

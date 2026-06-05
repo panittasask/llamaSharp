@@ -17,7 +17,7 @@
       <button
         type="button"
         class="session-item"
-        *ngFor="let session of sessions"
+        *ngFor="let session of sessions; trackBy: trackSession"
         [class.active]="session.id === activeSessionId"
         (click)="switchSession(session.id)"
       >
@@ -51,7 +51,7 @@
 
       <article
         class="bubble"
-        *ngFor="let message of messages"
+        *ngFor="let message of messages; trackBy: trackMessage"
         [class.user]="message.role === 'user'"
         [class.assistant]="message.role === 'assistant'"
       >
