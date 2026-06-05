@@ -4,8 +4,10 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import {
   AgentPlanState,
+  AiProviderStatus,
   PromptFileActionResult,
   AgentSessionEvent,
+  LmStudioModelsResponse,
   LlmApiService,
   RunTestsResult,
   WebSearchResult,
@@ -24,7 +26,13 @@ export class SettingsPageComponent {
   apiBaseUrl = '';
   statusText = '';
   serverBusy = false;
+  providerBusy = false;
   agentBusy = false;
+  providerStatus: AiProviderStatus | null = null;
+  lmStudioModels: string[] = [];
+  lmStudioMessage = '';
+  selectedLmStudioModel = '';
+  openAiModelInput = '';
 
   agentState: AgentPlanState | null = null;
   selectedAgentFolder = '';
@@ -57,7 +65,11 @@ export class SettingsPageComponent {
   async refreshAll(): Promise<void> {
     this.statusText = '';
     try {
-      await Promise.all([this.api.refreshAppState(), this.refreshAgentState()]);
+      await Promise.all([
+        this.api.refreshAppState(),
+        this.refreshAgentState(),
+        this.refreshProviderAndModels(),
+      ]);
       this.apiBaseUrl = this.api.getApiBaseUrl();
     } catch (err) {
       this.statusText = this.formatError(err);
@@ -82,6 +94,41 @@ export class SettingsPageComponent {
   saveApiBaseUrl(): void {
     this.api.updateApiBaseUrl(this.apiBaseUrl);
     this.statusText = 'Saved API base URL';
+    void this.refreshProviderAndModels();
+  }
+
+  async refreshProviderAndModels(): Promise<void> {
+    this.providerBusy = true;
+    this.lmStudioMessage = '';
+    try {
+      const provider = await firstValueFrom(this.api.getAiProviderStatus());
+      this.providerStatus = provider;
+      this.openAiModelInput = provider.configuredModel || '';
+
+      if (!provider.isOpenAiCompatible) {
+        this.lmStudioModels = [];
+        this.selectedLmStudioModel = '';
+        this.lmStudioMessage =
+          'Provider is not openai, so LM Studio model lookup is skipped.';
+        return;
+      }
+
+      const modelResponse: LmStudioModelsResponse = await firstValueFrom(
+        this.api.getLmStudioModels(),
+      );
+      this.lmStudioModels = modelResponse.models ?? [];
+      this.selectedLmStudioModel =
+        this.lmStudioModels.find((m) => m === this.openAiModelInput) ||
+        this.selectedLmStudioModel ||
+        '';
+      this.lmStudioMessage =
+        modelResponse.message ||
+        `Loaded ${modelResponse.count} model(s) from /v1/models`;
+    } catch (err) {
+      this.lmStudioMessage = this.formatError(err);
+    } finally {
+      this.providerBusy = false;
+    }
   }
 
   async startServer(): Promise<void> {
@@ -100,6 +147,32 @@ export class SettingsPageComponent {
       this.statusText = this.formatError(err);
     } finally {
       this.serverBusy = false;
+    }
+  }
+
+  selectLmStudioModel(model: string): void {
+    this.selectedLmStudioModel = model;
+    this.openAiModelInput = model;
+  }
+
+  async saveOpenAiModel(): Promise<void> {
+    const model = this.openAiModelInput.trim();
+    if (!model) {
+      this.statusText = 'OpenAI model is required';
+      return;
+    }
+
+    this.providerBusy = true;
+    this.statusText = '';
+    try {
+      const status = await firstValueFrom(this.api.setOpenAiModel(model));
+      this.providerStatus = status;
+      this.statusText = `Active OpenAI model set to ${status.configuredModel || model}`;
+      await this.refreshProviderAndModels();
+    } catch (err) {
+      this.statusText = this.formatError(err);
+    } finally {
+      this.providerBusy = false;
     }
   }
 

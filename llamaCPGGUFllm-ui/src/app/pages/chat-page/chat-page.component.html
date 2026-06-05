@@ -1,28 +1,13 @@
 <section class="chat-page">
   <aside class="chat-sidebar">
     <div class="sidebar-top">
-      <div>
-        <p class="eyebrow">Workspace</p>
-        <h1>Llama Assistant</h1>
-        <p class="muted">Continue chats like ChatGPT or Gemini.</p>
-      </div>
+      <h1>Chats</h1>
       <button type="button" class="new-chat" (click)="createNewChat()">
-        New Chat
+        + New
       </button>
     </div>
 
-    <section class="sidebar-card">
-      <div class="sidebar-card-head">
-        <span>Context</span>
-        <strong>{{ remainingContextPercent }}%</strong>
-      </div>
-      <div class="context-meter">
-        <span [style.width.%]="remainingContextPercent"></span>
-      </div>
-      <p class="muted small">
-        {{ remainingContextTokens }} tokens left of {{ contextBudgetTokens }}
-      </p>
-    </section>
+    <a class="settings-link" routerLink="/settings">Settings</a>
 
     <section class="sidebar-card sessions-card">
       <div class="sidebar-card-head">
@@ -42,26 +27,12 @@
         </span>
       </button>
     </section>
-
-    <section class="sidebar-card status-card">
-      <div class="sidebar-card-head">
-        <span>Status</span>
-        <strong>{{ activityState }}</strong>
-      </div>
-      <p class="muted small">{{ activityText }}</p>
-      <p class="muted small">API: {{ api.getApiBaseUrl() }}</p>
-    </section>
   </aside>
 
   <main class="chat-main">
     <header class="chat-header">
       <div>
-        <p class="eyebrow">Session</p>
         <h2>{{ sessionLabel }}</h2>
-      </div>
-      <div class="header-chip">
-        <span>Remaining context</span>
-        <strong>{{ remainingContextTokens }} tokens</strong>
       </div>
     </header>
 
@@ -102,6 +73,23 @@
         />
       </div>
 
+      <div class="search-bar" *ngIf="showSearch && !isAgentMode">
+        <input
+          type="text"
+          [(ngModel)]="searchQuery"
+          (keydown.enter)="searchAndInjectContext()"
+          placeholder="Search DuckDuckGo and inject results..."
+        />
+        <button
+          type="button"
+          class="search-go"
+          (click)="searchAndInjectContext()"
+          [disabled]="searchBusy || !searchQuery.trim()"
+        >
+          {{ searchBusy ? '...' : 'Search' }}
+        </button>
+      </div>
+
       <textarea
         [(ngModel)]="prompt"
         (keydown)="onComposerKeyDown($event)"
@@ -138,6 +126,16 @@
           </div>
 
           <div class="buttons">
+            <button
+              type="button"
+              class="search-toggle"
+              (click)="toggleSearch()"
+              [class.active]="showSearch"
+              [disabled]="isAgentMode"
+              title="Web Search"
+            >
+              🔍
+            </button>
             <button
               type="button"
               class="secondary"

@@ -69,11 +69,86 @@
         Save
       </button>
     </div>
+
+    <div class="actions two-col provider-actions">
+      <button
+        type="button"
+        class="ghost"
+        (click)="refreshProviderAndModels()"
+        [disabled]="providerBusy"
+      >
+        {{ providerBusy ? "Checking..." : "Check Active AI" }}
+      </button>
+    </div>
+
+    <div class="provider-box" *ngIf="providerStatus as provider">
+      <p>
+        <strong>Provider:</strong>
+        <code>{{ provider.provider }}</code>
+      </p>
+      <p>
+        <strong>Base URL:</strong>
+        <code>{{ provider.baseUrl || '-' }}</code>
+      </p>
+      <p>
+        <strong>Configured Model:</strong>
+        <code>{{ provider.configuredModel || '-' }}</code>
+      </p>
+      <p>
+        <strong>LM Studio-like endpoint:</strong>
+        <code>{{ provider.isLmStudioLikely ? 'Yes' : 'No' }}</code>
+      </p>
+    </div>
+
+    <div class="provider-box" *ngIf="providerStatus?.isOpenAiCompatible">
+      <h3>LM Studio Models (/v1/models)</h3>
+      <p class="subtext" *ngIf="lmStudioMessage">{{ lmStudioMessage }}</p>
+
+      <label for="openAiModelInput">Active OpenAI model</label>
+      <div class="inline-row">
+        <input
+          id="openAiModelInput"
+          type="text"
+          [(ngModel)]="openAiModelInput"
+          placeholder="qwen2.5-coder-7b-instruct"
+        />
+        <button
+          type="button"
+          class="primary"
+          (click)="saveOpenAiModel()"
+          [disabled]="providerBusy"
+        >
+          Save Model
+        </button>
+      </div>
+
+      <label for="lmStudioModelSelect">Select from detected models</label>
+      <select
+        id="lmStudioModelSelect"
+        [ngModel]="selectedLmStudioModel"
+        (ngModelChange)="selectLmStudioModel($event)"
+      >
+        <option value="">Select model from /v1/models</option>
+        <option *ngFor="let model of lmStudioModels" [ngValue]="model">
+          {{ model }}
+        </option>
+      </select>
+
+      <ul class="model-list" *ngIf="lmStudioModels.length > 0">
+        <li *ngFor="let model of lmStudioModels">
+          <code>{{ model }}</code>
+        </li>
+      </ul>
+    </div>
   </article>
 
   <article class="card server-card" *ngIf="activeTab === 'server'">
     <ng-container *ngIf="api.appState$ | async as state">
       <h2>Server Control</h2>
+
+      <p class="subtext warn" *ngIf="providerStatus && !providerStatus.isLlamaCpp">
+        Current provider is <code>{{ providerStatus.provider }}</code>. Start/Stop/Switch controls are for llama.cpp only.
+      </p>
 
       <div
         class="status"
@@ -94,52 +169,54 @@
         </div>
       </div>
 
-      <label for="modelSelect">Model</label>
-      <select
-        id="modelSelect"
-        [ngModel]="state.selectedModel"
-        (ngModelChange)="setSelectedModel($event)"
-      >
-        <option value="" disabled>Select a model</option>
-        <option *ngFor="let model of state.models" [ngValue]="model">
-          {{ model }}
-        </option>
-      </select>
+      <ng-container *ngIf="!providerStatus || providerStatus.isLlamaCpp">
+        <label for="modelSelect">Model</label>
+        <select
+          id="modelSelect"
+          [ngModel]="state.selectedModel"
+          (ngModelChange)="setSelectedModel($event)"
+        >
+          <option value="" disabled>Select a model</option>
+          <option *ngFor="let model of state.models" [ngValue]="model">
+            {{ model }}
+          </option>
+        </select>
 
-      <div class="actions">
-        <button
-          type="button"
-          class="success"
-          (click)="startServer()"
-          [disabled]="serverBusy"
-        >
-          Start
-        </button>
-        <button
-          type="button"
-          class="danger"
-          (click)="stopServer()"
-          [disabled]="serverBusy"
-        >
-          Stop
-        </button>
-        <button
-          type="button"
-          class="primary"
-          (click)="switchModel()"
-          [disabled]="serverBusy || !state.selectedModel"
-        >
-          Switch model
-        </button>
-        <button
-          type="button"
-          class="ghost"
-          (click)="refreshAll()"
-          [disabled]="serverBusy"
-        >
-          Refresh
-        </button>
-      </div>
+        <div class="actions">
+          <button
+            type="button"
+            class="success"
+            (click)="startServer()"
+            [disabled]="serverBusy"
+          >
+            Start
+          </button>
+          <button
+            type="button"
+            class="danger"
+            (click)="stopServer()"
+            [disabled]="serverBusy"
+          >
+            Stop
+          </button>
+          <button
+            type="button"
+            class="primary"
+            (click)="switchModel()"
+            [disabled]="serverBusy || !state.selectedModel"
+          >
+            Switch model
+          </button>
+          <button
+            type="button"
+            class="ghost"
+            (click)="refreshAll()"
+            [disabled]="serverBusy"
+          >
+            Refresh
+          </button>
+        </div>
+      </ng-container>
 
       <p class="status-text" *ngIf="statusText">{{ statusText }}</p>
     </ng-container>

@@ -6,8 +6,10 @@ using Microsoft.Extensions.Options;
 namespace llamaCPGGUFllm.Controllers
 {
     public record PromptRequest(string Prompt);
+    public record ChatMessagesRequest(ChatMessageItem[] Messages);
     public record StartServerRequest(string? ModelPath);
     public record SwitchModelRequest(string ModelPath);
+    public record SetOpenAiModelRequest(string Model);
 
     public sealed record ServerConfigResponse(int ContextSize, int MaxTokens);
 
@@ -17,14 +19,48 @@ namespace llamaCPGGUFllm.Controllers
     {
         private readonly LlmService _llmService;
         private readonly LlamaServerManager _serverManager;
+        private readonly AiProviderService _aiProviderService;
+        private readonly LmStudioService _lmStudioService;
         private readonly LlmConfiguration _configuration;
 
         // ฉีด LlmService เข้ามาใช้งานผ่าน DI
-        public LlmController(LlmService llmService, LlamaServerManager serverManager, IOptions<LlmConfiguration> configuration)
+        public LlmController(
+            LlmService llmService,
+            LlamaServerManager serverManager,
+            AiProviderService aiProviderService,
+            LmStudioService lmStudioService,
+            IOptions<LlmConfiguration> configuration)
         {
             _llmService = llmService;
             _serverManager = serverManager;
+            _aiProviderService = aiProviderService;
+            _lmStudioService = lmStudioService;
             _configuration = configuration.Value;
+        }
+
+        [HttpGet("provider/status")]
+        public IActionResult GetProviderStatus()
+        {
+            return Ok(_aiProviderService.GetCurrentStatus());
+        }
+
+        [HttpGet("provider/lmstudio/models")]
+        public async Task<IActionResult> GetLmStudioModels(CancellationToken ct)
+        {
+            var result = await _lmStudioService.GetModelsAsync(ct);
+            return Ok(result);
+        }
+
+        [HttpPost("provider/openai/model")]
+        public IActionResult SetOpenAiModel([FromBody] SetOpenAiModelRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Model))
+            {
+                return BadRequest("Model is required");
+            }
+
+            var result = _aiProviderService.SetOpenAiModel(request.Model);
+            return Ok(result);
         }
 
         [HttpGet("server/status")]
@@ -74,55 +110,86 @@ namespace llamaCPGGUFllm.Controllers
         [HttpPost("stream")]
         public async Task GetStreamAsync([FromBody] PromptRequest request, CancellationToken ct)
         {
-            // 1. ตั้งค่า Header สำหรับการทำ Server-Sent Events (SSE)
             Response.ContentType = "text/event-stream";
             Response.Headers.Append("Cache-Control", "no-cache");
             Response.Headers.Append("Connection", "keep-alive");
-
             try
             {
-                // 2. ดึงข้อมูลจาก Service และทยอยพ่นออกไป
                 await foreach (var chunk in _llmService.GenerateStreamAsync(request.Prompt, ct))
                 {
-                    var safeChunk = chunk.Replace("\n", "\\n").Replace("\r", "");
-
-                    await Response.WriteAsync($"data: {safeChunk}\n\n", ct);
-                    await Response.Body.FlushAsync(ct); // บังคับให้ส่งข้อมูลออกทันที ไม่ต้องรอ Buffer
+                    await Response.WriteAsync($"data: {chunk.Replace("\n", "\\n").Replace("\r", "")}\n\n", ct);
+                    await Response.Body.FlushAsync(ct);
                 }
-
-                // 3. ส่งสัญญาณจบ Stream
                 await Response.WriteAsync("data: [DONE]\n\n", ct);
             }
-            catch (OperationCanceledException)
-            {
-                // ผู้ใช้กดยกเลิก หรือปิดเบราว์เซอร์ระหว่างโหลด
-                Console.WriteLine("Streaming connection was canceled by the client.");
-            }
+            catch (OperationCanceledException) { }
         }
-        [HttpPost("normal")]
-        public async Task<IActionResult> PostNormalAsync([FromBody] PromptRequest request, CancellationToken ct)
-        {
-            // 1. เริ่มจับเวลา
-            var stopwatch = Stopwatch.StartNew();
 
+        [HttpPost("chat/stream")]
+        public async Task GetChatStreamAsync([FromBody] ChatMessagesRequest request, CancellationToken ct)
+        {
+            if (request.Messages == null || request.Messages.Length == 0)
+            {
+                Response.StatusCode = 400;
+                return;
+            }
+
+            Response.ContentType = "text/event-stream";
+            Response.Headers.Append("Cache-Control", "no-cache");
+            Response.Headers.Append("Connection", "keep-alive");
             try
             {
-                // 2. เรียกใช้งาน Service แบบรอคำตอบเต็ม
-                string responseText = await _llmService.GenerateFullTextAsync(request.Prompt, ct);
+                await foreach (var chunk in _llmService.GenerateStreamFromMessagesAsync(request.Messages, ct))
+                {
+                    await Response.WriteAsync($"data: {chunk.Replace("\n", "\\n").Replace("\r", "")}\n\n", ct);
+                    await Response.Body.FlushAsync(ct);
+                }
+                await Response.WriteAsync("data: [DONE]\n\n", ct);
+            }
+            catch (OperationCanceledException) { }
+        }
 
-                // 3. หยุดจับเวลาเมื่อได้คำตอบครบถ้วน
+        [HttpPost("chat/normal")]
+        public async Task<IActionResult> PostChatNormalAsync([FromBody] ChatMessagesRequest request, CancellationToken ct)
+        {
+            if (request.Messages == null || request.Messages.Length == 0)
+                return BadRequest("Messages array is required.");
+
+            var stopwatch = Stopwatch.StartNew();
+            try
+            {
+                var responseText = await _llmService.GenerateFullTextFromMessagesAsync(request.Messages, ct);
                 stopwatch.Stop();
-                long elapsedMilliseconds = stopwatch.ElapsedMilliseconds;
-
-                // 4. บันทึกข้อมูลลง Log File
-                await WriteLogAsync(request.Prompt, responseText, elapsedMilliseconds);
-
-                // 5. ส่งผลลัพธ์กลับไปให้ Client ในรูปแบบ JSON ปกติ
+                var lastUserPrompt = request.Messages.LastOrDefault(m => m.Role == "user")?.Content ?? string.Empty;
+                await WriteLogAsync(lastUserPrompt, responseText, stopwatch.ElapsedMilliseconds);
                 return Ok(new
                 {
                     Response = responseText,
-                    TimeElapsedMs = elapsedMilliseconds,
-                    TimeElapsedSec = elapsedMilliseconds / 1000.0
+                    TimeElapsedMs = stopwatch.ElapsedMilliseconds,
+                    TimeElapsedSec = stopwatch.ElapsedMilliseconds / 1000.0
+                });
+            }
+            catch (Exception ex)
+            {
+                stopwatch.Stop();
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
+        }
+
+        [HttpPost("normal")]
+        public async Task<IActionResult> PostNormalAsync([FromBody] PromptRequest request, CancellationToken ct)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            try
+            {
+                string responseText = await _llmService.GenerateFullTextAsync(request.Prompt, ct);
+                stopwatch.Stop();
+                await WriteLogAsync(request.Prompt, responseText, stopwatch.ElapsedMilliseconds);
+                return Ok(new
+                {
+                    Response = responseText,
+                    TimeElapsedMs = stopwatch.ElapsedMilliseconds,
+                    TimeElapsedSec = stopwatch.ElapsedMilliseconds / 1000.0
                 });
             }
             catch (Exception ex)

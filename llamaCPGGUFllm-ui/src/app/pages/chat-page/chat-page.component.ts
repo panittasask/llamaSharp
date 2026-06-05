@@ -13,7 +13,10 @@ import {
   LlmApiService,
   NormalResponse,
   ServerConfigResponse,
+  ChatMessagePayload,
+  WebSearchResult,
 } from '../../llm-api.service';
+import { RouterLink } from '@angular/router';
 
 type MessageRole = 'user' | 'assistant';
 type ComposerMode = 'chat' | 'agent';
@@ -39,7 +42,7 @@ const DEFAULT_MAX_TOKENS = 1024;
 @Component({
   selector: 'app-chat-page',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './chat-page.component.html',
   styleUrl: './chat-page.component.scss',
 })
@@ -57,6 +60,10 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
   normalBusy = false;
   streamBusy = false;
   agentBusy = false;
+  searchBusy = false;
+  showSearch = false;
+  searchQuery = '';
+  searchResults: WebSearchResult[] = [];
   lastNormalTiming = '';
   activityState: 'idle' | 'thinking' | 'acting' | 'streaming' = 'idle';
   activityText = 'Idle';
@@ -182,20 +189,19 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
     const prompt = this.prompt.trim();
     if (!prompt || this.normalBusy || this.streamBusy) return;
 
-    const composedPrompt = this.composePromptForBackend(prompt);
     this.appendUserMessage(prompt);
-
+    this.prompt = '';
     this.normalBusy = true;
     this.activityState = 'thinking';
     this.activityText = 'Thinking (test mode - full response)';
     this.lastNormalTiming = '';
-    this.prompt = '';
     this.pendingAutoScroll = true;
     this.saveSessions();
 
     try {
+      const messages = this.buildMessagesPayload();
       const response: NormalResponse = await firstValueFrom(
-        this.api.chatNormal(composedPrompt),
+        this.api.chatNormalFromMessages(messages),
       );
       this.messages.push({
         role: 'assistant',
@@ -228,8 +234,8 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
       return;
     }
 
-    const composedPrompt = this.composePromptForBackend(prompt);
     this.appendUserMessage(prompt);
+    const messages = this.buildMessagesPayload();
 
     this.streamBusy = true;
     this.activityState = 'streaming';
@@ -241,10 +247,10 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
     this.saveSessions();
 
     try {
-      const resp = await fetch(this.api.getStreamUrl(), {
+      const resp = await fetch(this.api.getChatStreamUrl(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: composedPrompt }),
+        body: JSON.stringify({ messages }),
       });
 
       if (!resp.ok || !resp.body) {
@@ -446,28 +452,62 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
     this.touchActiveSession();
   }
 
-  private composePromptForBackend(currentPrompt: string): string {
+  async searchAndInjectContext(): Promise<void> {
+    const query = this.searchQuery.trim();
+    if (!query || this.searchBusy) return;
+
+    this.searchBusy = true;
+    try {
+      const response = await firstValueFrom(this.api.searchWeb(query, 4));
+      this.searchResults = response.results ?? [];
+
+      if (this.searchResults.length === 0) return;
+
+      const summary = this.searchResults
+        .slice(0, 4)
+        .map((r, i) => `${i + 1}. ${r.title}: ${r.snippet} (${r.url})`)
+        .join('\n');
+
+      const contextBlock = `[Web search results for "${query}":\n${summary}]\n\n${query}`;
+      this.prompt = contextBlock;
+      this.showSearch = false;
+    } catch (err) {
+      // Silently ignore search errors; user can still type manually.
+    } finally {
+      this.searchBusy = false;
+    }
+  }
+
+  toggleSearch(): void {
+    this.showSearch = !this.showSearch;
+    if (!this.showSearch) {
+      this.searchResults = [];
+    }
+  }
+
+  private buildMessagesPayload(): ChatMessagePayload[] {
     const session = this.activeSession;
-    if (!session) {
-      return currentPrompt;
+    if (!session) return [];
+
+    const budget = this.contextBudgetTokens;
+    const all = session.messages;
+    const result: ChatMessagePayload[] = [];
+    let tokenCount = 0;
+
+    for (let i = all.length - 1; i >= 0; i--) {
+      const msg = all[i];
+      const tokens = this.estimateTokens(msg.content);
+      if (tokenCount + tokens > budget) break;
+      tokenCount += tokens;
+      result.unshift({ role: msg.role as 'user' | 'assistant', content: msg.content });
     }
 
-    const history = this.composeConversationPrompt(
-      session.messages,
-      currentPrompt,
-    );
-    return [
-      'You are continuing an existing chat session. Use the history below as context and keep the conversation continuous.',
-      `Session: ${session.title}`,
-      'Conversation history:',
-      history,
-      'Assistant:',
-    ].join('\n\n');
+    return result;
   }
 
   private composeConversationPrompt(
     messages: ChatMessage[],
-    currentPrompt: string,
+    _currentPrompt: string,
   ): string {
     const lines: string[] = [];
     const budget = this.contextBudgetTokens;
@@ -481,10 +521,6 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
         lines.shift();
         break;
       }
-    }
-
-    if (currentPrompt) {
-      lines.push(`User: ${currentPrompt}`);
     }
 
     return lines.join('\n');

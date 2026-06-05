@@ -25,6 +25,11 @@ export interface NormalResponse {
   timeElapsedSec: number;
 }
 
+export interface ChatMessagePayload {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
 export interface AppServerState {
   status: ServerStatus | null;
   models: string[];
@@ -34,6 +39,25 @@ export interface AppServerState {
 export interface ServerConfigResponse {
   contextSize: number;
   maxTokens: number;
+}
+
+export interface AiProviderStatus {
+  provider: string;
+  isLlamaCpp: boolean;
+  isOpenAiCompatible: boolean;
+  isLmStudioLikely: boolean;
+  baseUrl: string;
+  configuredModel: string | null;
+}
+
+export interface LmStudioModelsResponse {
+  providerAllowsQuery: boolean;
+  provider: string;
+  baseUrl: string;
+  configuredModel: string | null;
+  count: number;
+  models: string[];
+  message: string | null;
 }
 
 export interface AgentChecklistItem {
@@ -250,9 +274,36 @@ export class LlmApiService {
     return this.http.get<ServerConfigResponse>(this.endpoint('/server/config'));
   }
 
+  getAiProviderStatus(): Observable<AiProviderStatus> {
+    return this.http.get<AiProviderStatus>(this.endpoint('/provider/status'));
+  }
+
+  getLmStudioModels(): Observable<LmStudioModelsResponse> {
+    return this.http.get<LmStudioModelsResponse>(
+      this.endpoint('/provider/lmstudio/models'),
+    );
+  }
+
+  setOpenAiModel(model: string): Observable<AiProviderStatus> {
+    return this.http.post<AiProviderStatus>(
+      this.endpoint('/provider/openai/model'),
+      {
+        model,
+      },
+    );
+  }
+
   chatNormal(prompt: string): Observable<NormalResponse> {
     const payload: PromptRequest = { prompt };
     return this.http.post<NormalResponse>(this.endpoint('/normal'), payload);
+  }
+
+  chatNormalFromMessages(messages: ChatMessagePayload[]): Observable<NormalResponse> {
+    return this.http.post<NormalResponse>(this.endpoint('/chat/normal'), { messages });
+  }
+
+  getChatStreamUrl(): string {
+    return this.endpoint('/chat/stream');
   }
 
   getStreamUrl(): string {

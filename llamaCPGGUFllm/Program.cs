@@ -24,10 +24,15 @@ builder.Services.AddHttpClient<LlmService>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(10);
 });
+builder.Services.AddHttpClient<LmStudioService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(20);
+});
 builder.Services.AddHttpClient<AgentWorkspaceService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(25);
 });
+builder.Services.AddSingleton<AiProviderService>();
 builder.Services.AddSingleton<LlamaServerManager>();
 
 var app = builder.Build();
