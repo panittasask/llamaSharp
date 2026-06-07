@@ -1,34 +1,4 @@
 <section class="chat-page">
-  <aside class="chat-sidebar">
-    <div class="sidebar-top">
-      <h1>Chats</h1>
-      <button type="button" class="new-chat" (click)="createNewChat()">
-        + New
-      </button>
-    </div>
-
-    <a class="settings-link" routerLink="/settings">Settings</a>
-
-    <section class="sidebar-card sessions-card">
-      <div class="sidebar-card-head">
-        <span>Sessions</span>
-        <strong>{{ sessions.length }}</strong>
-      </div>
-      <button
-        type="button"
-        class="session-item"
-        *ngFor="let session of sessions; trackBy: trackSession"
-        [class.active]="session.id === activeSessionId"
-        (click)="switchSession(session.id)"
-      >
-        <span class="session-title">{{ session.title }}</span>
-        <span class="session-meta">
-          {{ session.updatedAtUtc | date: "shortTime" }}
-        </span>
-      </button>
-    </section>
-  </aside>
-
   <main class="chat-main">
     <header class="chat-header">
       <div>
@@ -49,16 +19,39 @@
         </p>
       </div>
 
+      <ng-container *ngFor="let message of messages; trackBy: trackMessage">
+        <article
+          class="bubble"
+          *ngIf="
+            message.role === 'user' ||
+            !!message.content.trim() ||
+            !showAssistantTyping
+          "
+          [class.user]="message.role === 'user'"
+          [class.assistant]="message.role === 'assistant'"
+        >
+          <div class="bubble-role">
+            {{ message.role === "user" ? "You" : "Assistant" }}
+          </div>
+          <p>{{ message.content }}</p>
+        </article>
+      </ng-container>
+
       <article
-        class="bubble"
-        *ngFor="let message of messages; trackBy: trackMessage"
-        [class.user]="message.role === 'user'"
-        [class.assistant]="message.role === 'assistant'"
+        class="bubble assistant typing-bubble"
+        *ngIf="showAssistantTyping"
       >
-        <div class="bubble-role">
-          {{ message.role === "user" ? "You" : "Assistant" }}
+        <!-- <div class="bubble-role">Assistant</div> -->
+        <div
+          class="typing-row"
+          aria-live="polite"
+          aria-label="Assistant is working"
+        >
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+          <span class="typing-text">{{ assistantTypingText }}</span>
         </div>
-        <p>{{ message.content }}</p>
       </article>
     </div>
 
@@ -86,7 +79,7 @@
           (click)="searchAndInjectContext()"
           [disabled]="searchBusy || !searchQuery.trim()"
         >
-          {{ searchBusy ? '...' : 'Search' }}
+          {{ searchBusy ? "..." : "Search" }}
         </button>
       </div>
 
@@ -126,16 +119,16 @@
           </div>
 
           <div class="buttons">
-            <button
-              type="button"
-              class="search-toggle"
-              (click)="toggleSearch()"
-              [class.active]="showSearch"
-              [disabled]="isAgentMode"
-              title="Web Search"
+            <label class="speed-mode" for="chatSpeedMode">Mode</label>
+            <select
+              id="chatSpeedMode"
+              class="speed-select"
+              [(ngModel)]="chatSpeedMode"
+              [disabled]="isAgentMode || streamBusy || normalBusy"
             >
-              🔍
-            </button>
+              <option value="thinking">Thinking</option>
+              <option value="fast">Fast</option>
+            </select>
             <button
               type="button"
               class="secondary"

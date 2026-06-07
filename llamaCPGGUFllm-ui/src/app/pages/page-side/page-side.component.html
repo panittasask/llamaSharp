@@ -1,0 +1,44 @@
+<aside class="chat-sidebar">
+  <div class="sidebar-top">
+    <h1>Navigator</h1>
+    <button type="button" class="new-chat" (click)="createNewChat()">
+      + New
+    </button>
+  </div>
+
+  <nav class="main-nav">
+    <a
+      class="settings-link"
+      routerLink="/chat"
+      routerLinkActive="active"
+      [routerLinkActiveOptions]="{ exact: true }"
+    >
+      Chat
+    </a>
+    <a class="settings-link" routerLink="/agent" routerLinkActive="active">
+      Agent
+    </a>
+    <a class="settings-link" routerLink="/settings" routerLinkActive="active">
+      Settings
+    </a>
+  </nav>
+
+  <section class="sidebar-card sessions-card">
+    <div class="sidebar-card-head">
+      <span>Sessions</span>
+      <strong>{{ sessions.length }}</strong>
+    </div>
+    <button
+      type="button"
+      class="session-item"
+      *ngFor="let session of sessions; trackBy: trackSession"
+      [class.active]="session.id === activeSessionId"
+      (click)="switchSession(session.id)"
+    >
+      <span class="session-title">{{ session.title }}</span>
+      <span class="session-meta">
+        {{ session.updatedAtUtc | date: "shortTime" }}
+      </span>
+    </button>
+  </section>
+</aside>

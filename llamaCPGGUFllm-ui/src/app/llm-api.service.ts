@@ -141,6 +141,25 @@ export interface WebSearchResponse {
   results: WebSearchResult[];
 }
 
+export interface ChatSessionArchiveMessage {
+  role: string;
+  content: string;
+}
+
+export interface ChatSessionArchiveItem {
+  id: string;
+  title: string;
+  createdAtUtc: string;
+  updatedAtUtc: string;
+  messages: ChatSessionArchiveMessage[];
+}
+
+export interface ChatSessionArchiveResponse {
+  jsonFilePath: string;
+  markdownFilePath: string;
+  sessionCount: number;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -324,11 +343,19 @@ export class LlmApiService {
     return this.http.post<NormalResponse>(this.endpoint('/normal'), payload);
   }
 
-  chatNormalFromMessages(messages: ChatMessagePayload[]): Observable<NormalResponse> {
-    return this.http.post<NormalResponse>(this.endpoint('/chat/normal'), { messages });
+  chatNormalFromMessages(
+    messages: ChatMessagePayload[],
+  ): Observable<NormalResponse> {
+    return this.http.post<NormalResponse>(this.endpoint('/chat/normal'), {
+      messages,
+    });
   }
 
-  getChatStreamUrl(): string {
+  getChatStreamUrl(mode: 'thinking' | 'default' = 'default'): string {
+    if (mode === 'thinking') {
+      return this.endpoint('/chat/thinking/stream');
+    }
+
     return this.endpoint('/chat/stream');
   }
 
@@ -441,5 +468,18 @@ export class LlmApiService {
         limit,
       },
     });
+  }
+
+  archiveChatSessions(
+    sessions: ChatSessionArchiveItem[],
+    activeSessionId: string,
+  ): Observable<ChatSessionArchiveResponse> {
+    return this.http.post<ChatSessionArchiveResponse>(
+      this.endpoint('/chat/sessions/archive'),
+      {
+        sessions,
+        activeSessionId,
+      },
+    );
   }
 }

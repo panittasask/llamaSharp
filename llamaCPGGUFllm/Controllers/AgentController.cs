@@ -1,4 +1,6 @@
 ﻿using System.Diagnostics;
+using System.Text;
+using System.Text.Json;
 using llamaCPGGUFllm.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -7,6 +9,14 @@ namespace llamaCPGGUFllm.Controllers
 {
     public record PromptRequest(string Prompt);
     public record ChatMessagesRequest(ChatMessageItem[] Messages);
+    public record ChatSessionMessageItem(string Role, string Content);
+    public record ChatSessionArchiveItem(
+        string Id,
+        string Title,
+        string CreatedAtUtc,
+        string UpdatedAtUtc,
+        ChatSessionMessageItem[] Messages);
+    public record ChatSessionArchiveRequest(ChatSessionArchiveItem[] Sessions, string ActiveSessionId);
     public record StartServerRequest(string? ModelPath);
     public record SwitchModelRequest(string ModelPath);
     public record SetOpenAiModelRequest(string Model);
@@ -149,6 +159,34 @@ namespace llamaCPGGUFllm.Controllers
             catch (OperationCanceledException) { }
         }
 
+        [HttpPost("chat/thinking/stream")]
+        public async Task GetThinkingChatStreamAsync([FromBody] ChatMessagesRequest request, CancellationToken ct)
+        {
+            if (request.Messages == null || request.Messages.Length == 0)
+            {
+                Response.StatusCode = 400;
+                return;
+            }
+
+            Response.ContentType = "text/event-stream";
+            Response.Headers.Append("Cache-Control", "no-cache");
+            Response.Headers.Append("Connection", "keep-alive");
+
+            try
+            {
+                var result = await _llmService.GenerateThinkingResponseWithFallbackAsync(request.Messages, ct);
+
+                foreach (var chunk in ChunkTextForSse(result.FinalResponse, 220))
+                {
+                    await Response.WriteAsync($"data: {chunk.Replace("\n", "\\n").Replace("\r", "")}\n\n", ct);
+                    await Response.Body.FlushAsync(ct);
+                }
+
+                await Response.WriteAsync("data: [DONE]\n\n", ct);
+            }
+            catch (OperationCanceledException) { }
+        }
+
         [HttpPost("chat/normal")]
         public async Task<IActionResult> PostChatNormalAsync([FromBody] ChatMessagesRequest request, CancellationToken ct)
         {
@@ -174,6 +212,72 @@ namespace llamaCPGGUFllm.Controllers
                 stopwatch.Stop();
                 return StatusCode(500, $"Internal server error: {ex.Message}");
             }
+        }
+
+        [HttpPost("chat/sessions/archive")]
+        public async Task<IActionResult> ArchiveChatSessionsAsync([FromBody] ChatSessionArchiveRequest request, CancellationToken ct)
+        {
+            if (request.Sessions == null)
+            {
+                return BadRequest("Sessions are required.");
+            }
+
+            var sessionsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "agent-workspace", "sessions");
+            Directory.CreateDirectory(sessionsDirectory);
+
+            var jsonFilePath = Path.Combine(sessionsDirectory, "chat-sessions-latest.json");
+            var markdownFilePath = Path.Combine(sessionsDirectory, "chat-sessions-latest.md");
+
+            var json = JsonSerializer.Serialize(request, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = true,
+            });
+
+            await System.IO.File.WriteAllTextAsync(jsonFilePath, json, Encoding.UTF8, ct);
+
+            var markdownBuilder = new StringBuilder();
+            markdownBuilder.AppendLine("# Chat Sessions Snapshot");
+            markdownBuilder.AppendLine();
+            markdownBuilder.AppendLine($"- Updated UTC: {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm:ss}");
+            markdownBuilder.AppendLine($"- Active Session ID: {request.ActiveSessionId}");
+            markdownBuilder.AppendLine($"- Session Count: {request.Sessions.Length}");
+            markdownBuilder.AppendLine();
+
+            foreach (var session in request.Sessions)
+            {
+                markdownBuilder.AppendLine($"## {session.Title} ({session.Id})");
+                markdownBuilder.AppendLine();
+                markdownBuilder.AppendLine($"- Created: {session.CreatedAtUtc}");
+                markdownBuilder.AppendLine($"- Updated: {session.UpdatedAtUtc}");
+                markdownBuilder.AppendLine($"- Messages: {session.Messages?.Length ?? 0}");
+                markdownBuilder.AppendLine();
+
+                if (session.Messages == null || session.Messages.Length == 0)
+                {
+                    markdownBuilder.AppendLine("_No messages_");
+                    markdownBuilder.AppendLine();
+                    continue;
+                }
+
+                foreach (var message in session.Messages)
+                {
+                    var role = string.IsNullOrWhiteSpace(message.Role) ? "unknown" : message.Role.Trim();
+                    markdownBuilder.AppendLine($"### {role}");
+                    markdownBuilder.AppendLine();
+                    markdownBuilder.AppendLine(message.Content ?? string.Empty);
+                    markdownBuilder.AppendLine();
+                }
+            }
+
+            await System.IO.File.WriteAllTextAsync(markdownFilePath, markdownBuilder.ToString(), Encoding.UTF8, ct);
+
+            return Ok(new
+            {
+                jsonFilePath,
+                markdownFilePath,
+                sessionCount = request.Sessions.Length,
+            });
         }
 
         [HttpPost("normal")]
@@ -231,6 +335,20 @@ namespace llamaCPGGUFllm.Controllers
                 Console.WriteLine($"Failed to write log file: {ex.Message}");
             }
 
+        }
+
+        private static IEnumerable<string> ChunkTextForSse(string text, int maxChunkSize)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                yield break;
+            }
+
+            for (var i = 0; i < text.Length; i += maxChunkSize)
+            {
+                var len = Math.Min(maxChunkSize, text.Length - i);
+                yield return text.Substring(i, len);
+            }
         }
     }
 }

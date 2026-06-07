@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import {
   AfterViewChecked,
   Component,
+  DoCheck,
   ElementRef,
   OnInit,
   ViewChild,
@@ -16,26 +17,14 @@ import {
   ChatMessagePayload,
   WebSearchResult,
 } from '../../llm-api.service';
-import { RouterLink } from '@angular/router';
+import {
+  ChatMessage,
+  ChatSession,
+  ChatSessionService,
+} from '../../chat-session.service';
 
-type MessageRole = 'user' | 'assistant';
 type ComposerMode = 'chat' | 'agent';
-
-interface ChatMessage {
-  role: MessageRole;
-  content: string;
-}
-
-interface ChatSession {
-  id: string;
-  title: string;
-  createdAtUtc: string;
-  updatedAtUtc: string;
-  messages: ChatMessage[];
-}
-
-const SESSION_STORAGE_KEY = 'llm.chat.sessions.v1';
-const ACTIVE_SESSION_KEY = 'llm.chat.activeSessionId.v1';
+type ChatSpeedMode = 'thinking' | 'fast';
 const DEFAULT_CONTEXT_SIZE = 4096;
 const DEFAULT_MAX_TOKENS = 1024;
 const STREAM_FLUSH_INTERVAL_MS = 10;
@@ -46,11 +35,11 @@ const CONTEXT_SAFETY_MARGIN_RATIO = 0.8;
 @Component({
   selector: 'app-chat-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule],
   templateUrl: './chat-page.component.html',
   styleUrl: './chat-page.component.scss',
 })
-export class ChatPageComponent implements AfterViewChecked, OnInit {
+export class ChatPageComponent implements AfterViewChecked, DoCheck, OnInit {
   @ViewChild('chatScrollFrame')
   private readonly chatScrollFrame?: ElementRef<HTMLDivElement>;
 
@@ -58,8 +47,6 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
   agentFilePath = '';
   composerMode: ComposerMode = 'chat';
   messages: ChatMessage[] = [];
-  sessions: ChatSession[] = [];
-  activeSessionId = '';
 
   normalBusy = false;
   streamBusy = false;
@@ -68,6 +55,7 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
   showSearch = false;
   searchQuery = '';
   searchResults: WebSearchResult[] = [];
+  chatSpeedMode: ChatSpeedMode = 'thinking';
   lastNormalTiming = '';
   activityState: 'idle' | 'thinking' | 'acting' | 'streaming' = 'idle';
   activityText = 'Idle';
@@ -77,19 +65,27 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
   private pendingAutoScroll = false;
   private pendingStreamText = '';
   private pendingStreamFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastSyncedSessionId = '';
 
   constructor(
     public readonly api: LlmApiService,
     private readonly route: ActivatedRoute,
+    private readonly chatSession: ChatSessionService,
   ) {}
 
   ngOnInit(): void {
-    this.loadSessions();
+    this.syncActiveSessionState(true);
     void this.refreshServerConfig();
 
-    const initialMode =
-      this.route.snapshot.routeConfig?.path === 'agent' ? 'agent' : 'chat';
-    this.setComposerMode(initialMode);
+    this.route.url.subscribe(() => {
+      const currentMode =
+        this.route.snapshot.routeConfig?.path === 'agent' ? 'agent' : 'chat';
+      this.setComposerMode(currentMode);
+    });
+  }
+
+  ngDoCheck(): void {
+    this.syncActiveSessionState();
   }
 
   ngAfterViewChecked(): void {
@@ -99,16 +95,33 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
 
     this.pendingAutoScroll = false;
     const frame = this.chatScrollFrame?.nativeElement;
-    // if (frame) {
-    //   frame.scrollTop = frame.scrollHeight;
-    // }
+    if (frame) {
+      frame.scrollTop = frame.scrollHeight;
+    }
+  }
+
+  private syncActiveSessionState(force = false): void {
+    const activeId = this.activeSessionId || '';
+    if (!force && activeId === this.lastSyncedSessionId) {
+      return;
+    }
+
+    this.lastSyncedSessionId = activeId;
+    this.messages = this.activeSession?.messages ?? [];
+    this.prompt = '';
+    this.pendingAutoScroll = true;
   }
 
   get activeSession(): ChatSession | undefined {
-    return (
-      this.sessions.find((session) => session.id === this.activeSessionId) ??
-      this.sessions[0]
-    );
+    return this.chatSession.activeSession;
+  }
+
+  get sessions(): ChatSession[] {
+    return this.chatSession.sessions;
+  }
+
+  get activeSessionId(): string {
+    return this.chatSession.activeSessionId;
   }
 
   get contextBudgetTokens(): number {
@@ -145,35 +158,27 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
     return this.composerMode === 'agent';
   }
 
-  createNewChat(): void {
-    const now = new Date().toISOString();
-    const id = `chat-${now.replace(/[-:.TZ]/g, '').slice(0, 14)}`;
-    const nextSession: ChatSession = {
-      id,
-      title: 'New chat',
-      createdAtUtc: now,
-      updatedAtUtc: now,
-      messages: [],
-    };
+  get showAssistantTyping(): boolean {
+    return !this.isAgentMode && (this.streamBusy || this.normalBusy);
+  }
 
-    this.sessions = [nextSession, ...this.sessions];
-    this.activeSessionId = nextSession.id;
-    this.messages = nextSession.messages;
+  get assistantTypingText(): string {
+    return this.streamBusy
+      ? 'Assistant is streaming...'
+      : 'Assistant is thinking...';
+  }
+
+  createNewChat(): void {
+    this.chatSession.createNewChat();
+    this.messages = this.activeSession?.messages ?? [];
     this.prompt = '';
-    this.saveSessions();
     this.pendingAutoScroll = true;
   }
 
   switchSession(sessionId: string): void {
-    const session = this.sessions.find((item) => item.id === sessionId);
-    if (!session || session.id === this.activeSessionId) {
-      return;
-    }
-
-    this.activeSessionId = session.id;
-    this.messages = session.messages;
+    this.chatSession.switchSession(sessionId);
+    this.messages = this.activeSession?.messages ?? [];
     this.prompt = '';
-    this.saveSessions();
     this.pendingAutoScroll = true;
   }
 
@@ -185,6 +190,11 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
   async submitComposer(): Promise<void> {
     if (this.isAgentMode) {
       await this.sendAgent();
+      return;
+    }
+
+    if (this.chatSpeedMode === 'fast') {
+      await this.sendNormal();
       return;
     }
 
@@ -255,7 +265,7 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
     this.saveSessions();
 
     try {
-      const resp = await fetch(this.api.getChatStreamUrl(), {
+      const resp = await fetch(this.api.getChatStreamUrl('thinking'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages }),
@@ -449,18 +459,8 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
   }
 
   private appendUserMessage(content: string): void {
-    const session = this.activeSession;
-    if (!session) {
-      return;
-    }
-
-    this.messages.push({ role: 'user', content });
-
-    if (session.title === 'New chat' || session.title.startsWith('Chat ')) {
-      session.title = this.summarizeTitle(content);
-    }
-
-    this.touchActiveSession();
+    this.chatSession.appendUserMessage(content);
+    this.messages = this.activeSession?.messages ?? [];
   }
 
   async searchAndInjectContext(): Promise<void> {
@@ -527,7 +527,10 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
 
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
-      result.unshift({ role: msg.role as 'user' | 'assistant', content: msg.content });
+      result.unshift({
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+      });
 
       if (msg.role === 'user') {
         userTurns += 1;
@@ -595,15 +598,6 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
     return Math.max(1, Math.ceil(text.length / 4));
   }
 
-  private summarizeTitle(prompt: string): string {
-    const cleaned = prompt.replace(/\s+/g, ' ').trim();
-    return cleaned.length > 36 ? `${cleaned.slice(0, 36)}...` : cleaned;
-  }
-
-  trackSession(_: number, session: ChatSession): string {
-    return session.id;
-  }
-
   trackMessage(index: number, message: ChatMessage): string {
     return `${index}:${message.role}`;
   }
@@ -624,10 +618,7 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
     }, STREAM_FLUSH_INTERVAL_MS);
   }
 
-  private flushPendingStreamText(
-    assistant: ChatMessage,
-    force = false,
-  ): void {
+  private flushPendingStreamText(assistant: ChatMessage, force = false): void {
     if (force) {
       this.clearPendingStreamFlush();
     }
@@ -650,105 +641,12 @@ export class ChatPageComponent implements AfterViewChecked, OnInit {
     this.pendingStreamFlushTimer = null;
   }
 
-  private loadSessions(): void {
-    const storedSessions = this.readStoredSessions();
-    if (storedSessions.length === 0) {
-      const now = new Date().toISOString();
-      storedSessions.push({
-        id: 'chat-default',
-        title: 'New chat',
-        createdAtUtc: now,
-        updatedAtUtc: now,
-        messages: [],
-      });
-    }
-
-    this.sessions = storedSessions;
-    const storedActive = this.safeReadStorage(ACTIVE_SESSION_KEY);
-    this.activeSessionId =
-      storedActive &&
-      this.sessions.some((session) => session.id === storedActive)
-        ? storedActive
-        : this.sessions[0].id;
-    this.messages = this.activeSession?.messages ?? [];
-    this.saveSessions();
-  }
-
-  private readStoredSessions(): ChatSession[] {
-    const raw = this.safeReadStorage(SESSION_STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-
-    try {
-      const parsed = JSON.parse(raw) as ChatSession[];
-      if (!Array.isArray(parsed)) {
-        return [];
-      }
-
-      return parsed
-        .map((session) => ({
-          id: String(session.id || ''),
-          title: String(session.title || 'New chat'),
-          createdAtUtc: String(
-            session.createdAtUtc || new Date().toISOString(),
-          ),
-          updatedAtUtc: String(
-            session.updatedAtUtc || new Date().toISOString(),
-          ),
-          messages: Array.isArray(session.messages)
-            ? session.messages
-                .filter(
-                  (message) =>
-                    message &&
-                    (message.role === 'user' || message.role === 'assistant'),
-                )
-                .map((message) => ({
-                  role: message.role,
-                  content: String(message.content || ''),
-                }))
-            : [],
-        }))
-        .filter((session) => session.id.length > 0);
-    } catch {
-      return [];
-    }
-  }
-
   private saveSessions(): void {
-    const now = new Date().toISOString();
-    const active = this.sessions.find(
-      (session) => session.id === this.activeSessionId,
-    );
-    if (active) {
-      active.updatedAtUtc = now;
-    }
-
-    this.safeWriteStorage(SESSION_STORAGE_KEY, JSON.stringify(this.sessions));
-    this.safeWriteStorage(ACTIVE_SESSION_KEY, this.activeSessionId);
+    this.chatSession.saveSessions();
   }
 
   private touchActiveSession(): void {
-    const active = this.activeSession;
-    if (active) {
-      active.updatedAtUtc = new Date().toISOString();
-    }
-  }
-
-  private safeReadStorage(key: string): string | null {
-    try {
-      return localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  }
-
-  private safeWriteStorage(key: string, value: string): void {
-    try {
-      localStorage.setItem(key, value);
-    } catch {
-      // Ignore storage restrictions in browser contexts.
-    }
+    this.chatSession.touchActiveSession();
   }
 
   private async refreshServerConfig(): Promise<void> {
